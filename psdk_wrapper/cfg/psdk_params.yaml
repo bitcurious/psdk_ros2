@@ -1,10 +1,10 @@
 /**:
     ros__parameters:
-      app_name: "YourPSDK"
-      app_id: "YourID"
-      app_key: "YourAppKey"
-      app_license: "YourAppLicense"
-      developer_account: "YourDeveloperAccount"
+      app_name: "M30"
+      app_id: "143537"
+      app_key: "bcf5b8d498ce256aee10c32613909d1"
+      app_license: "vb1J8Md0vbCEBjXRokWyGOrEEIGyJcgyUIY4xFe2DsE8g7nQABFqPXIIcRFtrl8MmVYlVgGN3GOH3ediIUOy2/QikxHaID4COsct5IjexSUulsUfjF26qITUj2xw8gzsnh2aqbRD78bqgp1BfHz5V6/WOK/nL1dfyEmHNZME/SfCA0Cht5b9aLqM/HMX9CQCLCwl9Q79QCI3JwtiDLMOIUzlGw61gWKORjYUyIp8xdr7XcBQreWjU/5B63yDO5KVFFkupU6yyuMlPJyiO2+104Fl6clrLU/jC35Ih4Tz3aJ7MIa6f5S1rvb9XU5YHLbQ8Zb0W14v4TLhIQpng9lRIg=="
+      developer_account: "umesh@farmx.ag"
       baudrate: "921600"
 
       num_of_initialization_retries: 3
@@ -28,11 +28,12 @@
       mandatory_modules:
         telemetry: true
         flight_control: true
-        camera: false
-        gimbal: false
-        liveview: false
-        hms: false
-        perception: false
+        camera: true
+        gimbal: true
+        liveview: true
+        hms: true
+        perception: true
+        waypoint_v2: false
 
       data_frequency: # Options are: 1, 5, 10, 50, 100, 200, 400 Hz
         imu: 100

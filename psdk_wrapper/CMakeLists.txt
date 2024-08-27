@@ -161,6 +161,7 @@ add_library(psdk_wrapper_libs SHARED
   src/modules/liveview.cpp
   src/modules/hms.cpp
   src/modules/perception.cpp
+  src/modules/waypoint_v2.cpp
   src/utils/node_thread.cpp
   ${DJI_OSAL_PATH}/osal_fs.c
   ${DJI_OSAL_PATH}/osal_socket.c

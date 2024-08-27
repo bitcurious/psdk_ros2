@@ -24,6 +24,7 @@ std::shared_ptr<psdk_ros2::CameraModule> psdk_ros2::global_camera_ptr_;
 std::shared_ptr<psdk_ros2::LiveviewModule> psdk_ros2::global_liveview_ptr_;
 std::shared_ptr<psdk_ros2::HmsModule> psdk_ros2::global_hms_ptr_;
 std::shared_ptr<psdk_ros2::PerceptionModule> psdk_ros2::global_perception_ptr_;
+std::shared_ptr<psdk_ros2::WaypointV2Module> psdk_ros2::global_waypoint_v2_ptr_;
 
 using namespace std::placeholders;  // NOLINT
 
@@ -53,6 +54,8 @@ PSDKWrapper::PSDKWrapper(const std::string &node_name)
   declare_parameter("mandatory_modules.liveview", rclcpp::ParameterValue(true));
   declare_parameter("mandatory_modules.hms", rclcpp::ParameterValue(true));
   declare_parameter("mandatory_modules.perception",
+                    rclcpp::ParameterValue(true));
+  declare_parameter("mandatory_modules.waypoint_v2",
                     rclcpp::ParameterValue(true));
   declare_parameter("tf_frame_prefix", rclcpp::ParameterValue(""));
   declare_parameter("imu_frame", rclcpp::ParameterValue("psdk_imu_link"));
@@ -97,6 +100,7 @@ PSDKWrapper::PSDKWrapper(const std::string &node_name)
   get_parameter("mandatory_modules.hms", is_hms_module_mandatory_);
   get_parameter("mandatory_modules.perception",
                 is_perception_module_mandatory_);
+  get_parameter("mandatory_modules.waypoint_v2", is_waypoint_v2_module_mandatory_);
 
   create_module(is_telemetry_module_mandatory_, telemetry_module_,
                 telemetry_thread_, "telemetry_node",
@@ -115,6 +119,9 @@ PSDKWrapper::PSDKWrapper(const std::string &node_name)
   create_module(is_perception_module_mandatory_, perception_module_,
                 perception_thread_, "perception_node",
                 psdk_ros2::global_perception_ptr_);
+  create_module(is_waypoint_v2_module_mandatory_, waypoint_v2_module_,
+                waypoint_v2_thread_, "waypoint_v2_node",
+                psdk_ros2::global_waypoint_v2_ptr_);
 }
 
 PSDKWrapper::~PSDKWrapper()
@@ -229,7 +236,9 @@ PSDKWrapper::on_shutdown(const rclcpp_lifecycle::State &state)
        !liveview_module_->deinit()) ||
       (is_hms_module_mandatory_ && hms_module_ && !hms_module_->deinit()) ||
       (is_perception_module_mandatory_ && perception_module_ &&
-       !perception_module_->deinit()))
+       !perception_module_->deinit()) ||
+      (is_waypoint_v2_module_mandatory_ && waypoint_v2_module_ &&
+       !waypoint_v2_module_->deinit()))
   {
     RCLCPP_ERROR(get_logger(), "Failed to deinitialize one or more modules.");
     return CallbackReturn::FAILURE;
@@ -263,6 +272,8 @@ PSDKWrapper::on_shutdown(const rclcpp_lifecycle::State &state)
   stop_and_destroy_module(is_hms_module_mandatory_, hms_module_, hms_thread_);
   stop_and_destroy_module(is_perception_module_mandatory_, perception_module_,
                           perception_thread_);
+  stop_and_destroy_module(is_waypoint_v2_module_mandatory_, waypoint_v2_module_,
+                          waypoint_v2_thread_);
 
   rclcpp::shutdown();
   return CallbackReturn::SUCCESS;
@@ -701,7 +712,8 @@ PSDKWrapper::initialize_psdk_modules()
       !initialize_module(is_gimbal_module_mandatory_, gimbal_module_) ||
       !initialize_module(is_liveview_module_mandatory_, liveview_module_) ||
       !initialize_module(is_hms_module_mandatory_, hms_module_) ||
-      !initialize_module(is_perception_module_mandatory_, perception_module_))
+      !initialize_module(is_perception_module_mandatory_, perception_module_) ||
+      !initialize_module(is_waypoint_v2_module_mandatory_, waypoint_v2_module_))
   {
     return false;
   }
@@ -805,6 +817,7 @@ PSDKWrapper::transition_modules_to_state(LifecycleState state)
   transition_if_mandatory(is_gimbal_module_mandatory_, gimbal_module_);
   transition_if_mandatory(is_hms_module_mandatory_, hms_module_);
   transition_if_mandatory(is_perception_module_mandatory_, perception_module_);
+  transition_if_mandatory(is_waypoint_v2_module_mandatory_, waypoint_v2_module_);
 
   return all_transitions_successful;
 }
