@@ -20,6 +20,26 @@
 
 namespace psdk_ros2
 {
+const waypoint_v2_event_str WaypointV2Module::s_waypoint_v2_event_str[] = {
+    {.eventID = 0x01, .eventStr = "Interrupt Event"},
+    {.eventID = 0x02, .eventStr = "Resume Event"},
+    {.eventID = 0x03, .eventStr = "Stop Event"},
+    {.eventID = 0x10, .eventStr = "Arrival Event"},
+    {.eventID = 0x11, .eventStr = "Finished Event"},
+    {.eventID = 0x12, .eventStr = "Avoid Obstacle Event"},
+    {.eventID = 0x30, .eventStr = "Action Switch Event"},
+    {.eventID = 0xFF, .eventStr = "Unknown"}};
+
+const waypoint_v2_state_str WaypointV2Module::s_waypoint_v2_state_str[] = {
+    {.missionState = 0x00, .stateStr = "Ground station not start"},
+    {.missionState = 0x01, .stateStr = "Mission prepared"},
+    {.missionState = 0x02, .stateStr = "Enter mission"},
+    {.missionState = 0x03, .stateStr = "Execute mission"},
+    {.missionState = 0x04, .stateStr = "Pause Mission"},
+    {.missionState = 0x05, .stateStr = "Enter mission after ending pause"},
+    {.missionState = 0x06, .stateStr = "Exit mission"},
+    {.missionState = 0xFF, .stateStr = "Unknown"}};
+
 WaypointV2Module::WaypointV2Module(const std::string &name)
     : rclcpp_lifecycle::LifecycleNode(
           name, "",
@@ -41,20 +61,14 @@ WaypointV2Module::on_configure(const rclcpp_lifecycle::State &state)
 {
   (void)state;
   RCLCPP_INFO(get_logger(), "Configuring WaypointV2Module");
-//   perception_stereo_vision_left_pub_ =
-//       create_publisher<sensor_msgs::msg::Image>(
-//           "psdk_ros2/perception_stereo_left_stream", rclcpp::SensorDataQoS());
-//   perception_stereo_vision_right_pub_ =
-//       create_publisher<sensor_msgs::msg::Image>(
-//           "psdk_ros2/perception_stereo_right_stream", rclcpp::SensorDataQoS());
-//   perception_camera_parameters_pub_ =
-//       create_publisher<psdk_interfaces::msg::PerceptionCameraParameters>(
-//           "psdk_ros2/perception_camera_parameters", 10);
-//   perception_stereo_vision_service_ =
-//       create_service<PerceptionStereoVisionSetup>(
-//           "psdk_ros2/start_perception",
-//           std::bind(&PerceptionModule::start_perception_cb, this,
-//                     std::placeholders::_1, std::placeholders::_2));
+  start_v2_waypoint_mission_ = create_service<std_srvs::srv::Trigger>(
+      "/wrapper/psdk_ros2/start_v2_waypoint_mission",
+      std::bind(&WaypointV2Module::start_v2_waypoint_mission, this,
+                std::placeholders::_1, std::placeholders::_2));
+  //   perception_stereo_vision_left_pub_ =
+  //       create_publisher<sensor_msgs::msg::Image>(
+  //           "psdk_ros2/perception_stereo_left_stream",
+  //           rclcpp::SensorDataQoS());
   return CallbackReturn::SUCCESS;
 }
 
@@ -63,9 +77,7 @@ WaypointV2Module::on_activate(const rclcpp_lifecycle::State &state)
 {
   (void)state;
   RCLCPP_INFO(get_logger(), "Activating WaypointV2Module");
-//   perception_stereo_vision_left_pub_->on_activate();
-//   perception_stereo_vision_right_pub_->on_activate();
-//   perception_camera_parameters_pub_->on_activate();
+  //   perception_camera_parameters_pub_->on_activate();
   return CallbackReturn::SUCCESS;
 }
 
@@ -74,9 +86,7 @@ WaypointV2Module::on_deactivate(const rclcpp_lifecycle::State &state)
 {
   (void)state;
   RCLCPP_INFO(get_logger(), "Deactivating WaypointV2Module");
-//   perception_stereo_vision_left_pub_->on_deactivate();
-//   perception_stereo_vision_right_pub_->on_deactivate();
-//   perception_camera_parameters_pub_->on_deactivate();
+  //   perception_camera_parameters_pub_->on_deactivate();
   return CallbackReturn::SUCCESS;
 }
 
@@ -85,10 +95,8 @@ WaypointV2Module::on_cleanup(const rclcpp_lifecycle::State &state)
 {
   (void)state;
   RCLCPP_INFO(get_logger(), "Cleaning up WaypointV2Module");
-//   perception_stereo_vision_service_.reset();
-//   perception_stereo_vision_left_pub_.reset();
-//   perception_stereo_vision_right_pub_.reset();
-//   perception_camera_parameters_pub_.reset();
+  start_v2_waypoint_mission_.reset();
+  //   perception_camera_parameters_pub_.reset();
   return CallbackReturn::SUCCESS;
 }
 
@@ -97,8 +105,8 @@ WaypointV2Module::on_shutdown(const rclcpp_lifecycle::State &state)
 {
   (void)state;
   RCLCPP_INFO(get_logger(), "Shutting down WaypointV2Module");
-//   std::unique_lock<std::shared_mutex> lock(global_ptr_mutex_);
-//   global_perception_ptr_.reset();
+    std::unique_lock<std::shared_mutex> lock(global_ptr_mutex_);
+    global_waypoint_v2_ptr_.reset();
   return CallbackReturn::SUCCESS;
 }
 
@@ -141,304 +149,261 @@ WaypointV2Module::deinit()
   return true;
 }
 
-// void
-// c_perception_image_callback(T_DjiPerceptionImageInfo imageInfo,
-//                           uint8_t *imageRawBuffer, uint32_t bufferLen)
-// {
-//   std::unique_lock<std::shared_mutex> lock(
-//       global_perception_ptr_->global_ptr_mutex_);
-//   return global_perception_ptr_->perception_image_callback(
-//       imageInfo, imageRawBuffer, bufferLen);
-// }
+T_DjiReturnCode
+c_waypoint_v2_event_callback(T_DjiWaypointV2MissionEventPush eventData)
+{
+  std::unique_lock<std::shared_mutex> lock(
+      global_waypoint_v2_ptr_->global_ptr_mutex_);
+  return global_waypoint_v2_ptr_->waypoint_v2_event_callback(eventData);
+}
 
-// void
-// PerceptionModule::start_perception_cb(
-//     const std::shared_ptr<PerceptionStereoVisionSetup::Request> request,
-//     const std::shared_ptr<PerceptionStereoVisionSetup::Response> response)
-// {
-//   std::string direction = request->stereo_cameras_direction;
-//   // to handle the casesensitivity of string.
-//   std::transform(direction.begin(), direction.end(), direction.begin(),
-//                  [](unsigned char c) { return std::toupper(c); });
-//   // Find the corresponding numeric value
-//   auto direction_num = direction_map_.find(direction);
-//   if (direction_num != direction_map_.end())
-//   {
-//     stereo_cameras_direction_ = direction_num->second;
-//   }
-//   else
-//   {
-//     response->success = false;
-//     response->message = "Invalid direction string";
-//     RCLCPP_ERROR(get_logger(), "Invalid direction: %s", direction.c_str());
-//     return;
-//   }
-//   // Clear previous stream result
-//   bool clear_perception_stream = clear_perception_stereo_cameras_stream();
-//   if (clear_perception_stream)
-//   {
-//     RCLCPP_INFO(get_logger(),
-//                 "Perception stereo cameras previous direction stream cleared "
-//                 "successfully...");
-//   }
-//   else
-//   {
-//     RCLCPP_INFO(get_logger(),
-//                 "Perception stereo cameras previous direction stream not "
-//                 "cleared successfully...");
-//   }
-//   bool streaming_result;
-//   if (request->start_stop)
-//   {
-//     timer_ = this->create_wall_timer(
-//         std::chrono::milliseconds(50),
-//         std::bind(&PerceptionModule::perception_camera_parameters_publisher,
-//                   this));
-//     streaming_result =
-//         start_perception_stereo_cameras_stream(stereo_cameras_direction_);
-//     if (!streaming_result)
-//     {
-//       response->success = false;
-//       response->message = "Stereo cameras stream not started";
-//       return;
-//     }
-//     response->success = true;
-//     response->message = "Stereo cameras stream started successfully";
-//     return;
-//   }
-//   else
-//   {
-//     timer_->cancel();
-//     streaming_result =
-//         stop_perception_stereo_cameras_stream(stereo_cameras_direction_);
-//     if (!streaming_result)
-//     {
-//       response->success = false;
-//       response->message = "Stereo cameras stream not stopped";
-//     }
-//     response->success = true;
-//     response->message = "Stereo cameras stream stopped successfully";
-//   }
-// }
+uint8_t
+c_waypoint_v2_get_mission_event_index(uint8_t eventID)
+{
+  std::unique_lock<std::shared_mutex> lock(
+      global_waypoint_v2_ptr_->global_ptr_mutex_);
+  return global_waypoint_v2_ptr_->waypoint_v2_get_mission_event_index(eventID);
+}
 
-// bool
-// PerceptionModule::start_perception_stereo_cameras_stream(
-//     const uint stereo_cameras_direction)
-// {
-//   T_DjiReturnCode return_code;
-//   switch (stereo_cameras_direction)
-//   {
-//     case 0:
-//       RCLCPP_INFO(get_logger(), "Subscribe down stereo camera pair images.");
-//       return_code = DjiPerception_SubscribePerceptionImage(
-//           DJI_PERCEPTION_RECTIFY_DOWN, &c_perception_image_callback);
-//       break;
-//     case 1:
-//       RCLCPP_INFO(get_logger(), "Subscribe front stereo camera pair images.");
-//       return_code = DjiPerception_SubscribePerceptionImage(
-//           DJI_PERCEPTION_RECTIFY_FRONT, &c_perception_image_callback);
-//       break;
-//     case 2:
-//       RCLCPP_INFO(get_logger(), "Subscribe rear stereo camera pair images.");
-//       return_code = DjiPerception_SubscribePerceptionImage(
-//           DJI_PERCEPTION_RECTIFY_REAR, &c_perception_image_callback);
-//       break;
-//     case 3:
-//       RCLCPP_INFO(get_logger(), "Subscribe up stereo camera pair images.");
-//       return_code = DjiPerception_SubscribePerceptionImage(
-//           DJI_PERCEPTION_RECTIFY_UP, &c_perception_image_callback);
-//       break;
-//     case 4:
-//       RCLCPP_INFO(get_logger(), "Subscribe left stereo camera pair images.");
-//       return_code = DjiPerception_SubscribePerceptionImage(
-//           DJI_PERCEPTION_RECTIFY_LEFT, &c_perception_image_callback);
-//       break;
-//     case 5:
-//       RCLCPP_INFO(get_logger(), "Subscribe right stereo camera pair images.");
-//       return_code = DjiPerception_SubscribePerceptionImage(
-//           DJI_PERCEPTION_RECTIFY_RIGHT, &c_perception_image_callback);
-//       break;
-//   }
+T_DjiReturnCode
+c_waypoint_v2_state_callback(T_DjiWaypointV2MissionStatePush stateData)
+{
+  std::unique_lock<std::shared_mutex> lock(
+      global_waypoint_v2_ptr_->global_ptr_mutex_);
+  return global_waypoint_v2_ptr_->waypoint_v2_state_callback(stateData);
+}
+void
+WaypointV2Module::start_v2_waypoint_mission(
+    const std::shared_ptr<std_srvs::srv::Trigger::Request> request,
+    const std::shared_ptr<std_srvs::srv::Trigger::Response> response)
+{
+  RCLCPP_INFO(get_logger(), "Waypoint mission starting");
+  std::string kmz_file =
+      "/home/ubuntu/psdk_ws/src/dji_rc_controller/waypoint_kmz/"
+      "waypoint_v3_test_file.kmz";
+  std::string output_dir =
+      "/home/ubuntu/psdk_ws/src/dji_rc_controller/waypoint_kmz";
+  extract_kmz(kmz_file, output_dir);
+  parse_kmz(output_dir);
+  T_DjiReturnCode return_code;
+  RCLCPP_INFO(get_logger(), "Register Mission event callback");
+  return_code =
+      DjiWaypointV2_RegisterMissionEventCallback(&c_waypoint_v2_event_callback);
+  if (return_code != DJI_ERROR_SYSTEM_MODULE_CODE_SUCCESS)
+  {
+    RCLCPP_ERROR(get_logger(),
+                 "Register waypoint V2 event failed, error code: 0x%08X",
+                 return_code);
+  }
+  // osalHandler->TaskSleepMs(timeOutMs);
+  RCLCPP_INFO(get_logger(), "Register Mission state callback");
+  return_code =
+      DjiWaypointV2_RegisterMissionStateCallback(&c_waypoint_v2_state_callback);
+  if (return_code != DJI_ERROR_SYSTEM_MODULE_CODE_SUCCESS)
+  {
+    RCLCPP_ERROR(get_logger(),
+                 "Register waypoint V2 state failed, error code: 0x%08X",
+                 return_code);
+  }
+  RCLCPP_INFO(get_logger(), "Done Register Mission state callback");
+  // osalHandler->TaskSleepMs(timeOutMs);
+}
 
-//   if (return_code != DJI_ERROR_SYSTEM_MODULE_CODE_SUCCESS)
-//   {
-//     RCLCPP_ERROR(
-//         get_logger(),
-//         "Could not start the perception stereo vision stream. Error code: %ld",
-//         return_code);
-//     return false;
-//   }
-//   RCLCPP_INFO(get_logger(),
-//               "Perception stereo cameras stream started successfully...");
-//   return true;
-// }
+void
+WaypointV2Module::extract_kmz(const std::string &kmz_file,
+                              const std::string &output_dir)
+{
+  std::string command = "unzip -o " + kmz_file + " -d " + output_dir;
+  int result = std::system(command.c_str());
+  if (result != 0)
+  {
+    RCLCPP_ERROR(get_logger(), "Failed to extract KMZ file.");
+    exit(1);
+  }
+}
 
-// bool
-// PerceptionModule::stop_perception_stereo_cameras_stream(
-//     const uint stereo_cameras_direction)
-// {
-//   T_DjiReturnCode return_code;
-//   switch (stereo_cameras_direction)
-//   {
-//     case 0:
-//       RCLCPP_INFO(get_logger(), "Unsubscribe down stereo camera pair images.");
-//       return_code =
-//           DjiPerception_UnsubscribePerceptionImage(DJI_PERCEPTION_RECTIFY_DOWN);
-//       break;
-//     case 1:
-//       RCLCPP_INFO(get_logger(), "Unsubscribe front stereo camera pair images.");
-//       return_code = DjiPerception_UnsubscribePerceptionImage(
-//           DJI_PERCEPTION_RECTIFY_FRONT);
-//       break;
-//     case 2:
-//       RCLCPP_INFO(get_logger(), "Unsubscribe rear stereo camera pair images.");
-//       return_code =
-//           DjiPerception_UnsubscribePerceptionImage(DJI_PERCEPTION_RECTIFY_REAR);
-//       break;
-//     case 3:
-//       RCLCPP_INFO(get_logger(), "Unsubscribe up stereo camera pair images.");
-//       return_code =
-//           DjiPerception_UnsubscribePerceptionImage(DJI_PERCEPTION_RECTIFY_UP);
-//       break;
-//     case 4:
-//       RCLCPP_INFO(get_logger(), "Unsubscribe left stereo camera pair images.");
-//       return_code =
-//           DjiPerception_UnsubscribePerceptionImage(DJI_PERCEPTION_RECTIFY_LEFT);
-//       break;
-//     case 5:
-//       RCLCPP_INFO(get_logger(), "Unsubscribe right stereo camera pair images.");
-//       return_code = DjiPerception_UnsubscribePerceptionImage(
-//           DJI_PERCEPTION_RECTIFY_RIGHT);
-//       break;
-//   }
+void
+WaypointV2Module::parse_kmz(const std::string &output_dir)
+{
+  std::string kml_file = output_dir + "/wpmz/template.kml";
+  std::ifstream file(kml_file);
+  if (!file.is_open())
+  {
+    RCLCPP_ERROR(get_logger(), "Failed to open KML file: %s", kml_file.c_str());
+    return;
+  }
 
-//   if (return_code != DJI_ERROR_SYSTEM_MODULE_CODE_SUCCESS)
-//   {
-//     RCLCPP_ERROR(
-//         get_logger(),
-//         "Could not stop the perception stereo vision stream. Error code: %ld",
-//         return_code);
-//     return false;
-//   }
-//   RCLCPP_INFO(get_logger(),
-//               "Perception stereo cameras stream stopped successfully...");
-//   return true;
-// }
+  std::stringstream buffer;
+  buffer << file.rdbuf();
+  std::string kml_content = buffer.str();
 
-// // To clear the previous stereo camera stream this function is used.
-// bool
-// PerceptionModule::clear_perception_stereo_cameras_stream()
-// {
-//   for (const auto &image_type : perception_image_direction)
-//   {
-//     T_DjiReturnCode return_code =
-//         DjiPerception_UnsubscribePerceptionImage(image_type);
-//     if (return_code != DJI_ERROR_SYSTEM_MODULE_CODE_SUCCESS)
-//     {
-//       RCLCPP_ERROR(get_logger(),
-//                    "Unsubscribe from image type %d failed, Error code: %ld",
-//                    image_type, return_code);
-//       return false;
-//     }
-//   }
+  pugi::xml_document doc;
+  pugi::xml_parse_result result = doc.load_string(kml_content.c_str());
+  if (!result)
+  {
+    RCLCPP_ERROR(get_logger(), "Failed to parse KML file.");
+    return;
+  }
 
-//   return true;
-// }
+  // Print the XML content for debugging
+  // RCLCPP_INFO(get_logger(), "KML File Content:\n%s", kml_content.c_str());
 
-// void
-// PerceptionModule::perception_image_callback(T_DjiPerceptionImageInfo imageInfo,
-//                                           uint8_t *imageRawBuffer,
-//                                           uint32_t bufferLen)
-// {
-//   /*
-//    * Please note that data type for left side stereo cameras are 1, 3, 5, 21,
-//    * 23, 25. data type for right side stereo cameras are 2, 4, 6, 22, 24, 26.
-//    * refer typedef enum E_DjiPerceptionCameraPosition.
-//    * below logic is applied to keep only two topic one for left camera and
-//    * another for right camera.
-//    */
-//   if (imageInfo.dataType % 2)
-//   {
-//     auto img = std::make_unique<sensor_msgs::msg::Image>();
-//     img->height = imageInfo.rawInfo.height;
-//     img->width = imageInfo.rawInfo.width;
-//     img->step = imageInfo.rawInfo.width;
-//     img->encoding = "mono8";
-//     img->data =
-//         std::vector<uint8_t>(imageRawBuffer, imageRawBuffer + bufferLen);
-//     img->header.stamp = this->get_clock()->now();
-//     img->header.frame_id = params_.perception_camera_frame;
-//     perception_stereo_vision_left_pub_->publish(std::move(img));
-//   }
+  // Use the correct namespace
+  pugi::xml_node missionConfig =
+      doc.child("kml").child("Document").child("wpml:missionConfig");
 
-//   else if (!(imageInfo.dataType % 2))
-//   {
-//     auto img = std::make_unique<sensor_msgs::msg::Image>();
-//     img->height = imageInfo.rawInfo.height;
-//     img->width = imageInfo.rawInfo.width;
-//     img->step = imageInfo.rawInfo.width;
-//     img->encoding = "mono8";
-//     img->data =
-//         std::vector<uint8_t>(imageRawBuffer, imageRawBuffer + bufferLen);
-//     img->header.stamp = this->get_clock()->now();
-//     img->header.frame_id = params_.perception_camera_frame;
-//     perception_stereo_vision_right_pub_->publish(std::move(img));
-//   }
-// }
+  if (!missionConfig)
+  {
+    RCLCPP_ERROR(get_logger(), "Missing missionConfig element in KML file.");
+    return;
+  }
 
-// void
-// PerceptionModule::perception_camera_parameters_publisher()
-// {
-//   psdk_interfaces::msg::PerceptionCameraParameters
-//       perception_camera_parameters_msg;
-//   T_DjiReturnCode return_code;
-//   T_DjiPerceptionCameraParametersPacket cameraParametersPacket = {0};
-//   return_code =
-//       DjiPerception_GetStereoCameraParameters(&cameraParametersPacket);
-//   if (return_code != DJI_ERROR_SYSTEM_MODULE_CODE_SUCCESS)
-//   {
-//     RCLCPP_ERROR(get_logger(), "Get camera parameters failed, Error code: %ld",
-//                  return_code);
-//   }
-//   perception_camera_parameters_msg.header.stamp = this->get_clock()->now();
-//   perception_camera_parameters_msg.header.frame_id =
-//       "stereo_cameras_parameters_link";
-//   perception_camera_parameters_msg.stereo_cameras_direction =
-//       stereo_cameras_direction_;
+  auto flyToWaylineMode =
+      missionConfig.child("wpml:flyToWaylineMode").text().as_string();
+  auto finishAction =
+      missionConfig.child("wpml:finishAction").text().as_string();
+  auto exitOnRCLost =
+      missionConfig.child("wpml:exitOnRCLost").text().as_string();
+  auto executeRCLostAction =
+      missionConfig.child("wpml:executeRCLostAction").text().as_string();
+  int takeOffSecurityHeight =
+      missionConfig.child("wpml:takeOffSecurityHeight").text().as_int();
+  int globalTransitionalSpeed =
+      missionConfig.child("wpml:globalTransitionalSpeed").text().as_int();
 
-//   // Populate the message fields
-//   std::copy(std::begin(cameraParametersPacket
-//                            .cameraParameters[stereo_cameras_direction_]
-//                            .leftIntrinsics),
-//             std::end(cameraParametersPacket
-//                          .cameraParameters[stereo_cameras_direction_]
-//                          .leftIntrinsics),
-//             std::begin(perception_camera_parameters_msg.left_intrinsics));
-//   std::copy(std::begin(cameraParametersPacket
-//                            .cameraParameters[stereo_cameras_direction_]
-//                            .rightIntrinsics),
-//             std::end(cameraParametersPacket
-//                          .cameraParameters[stereo_cameras_direction_]
-//                          .rightIntrinsics),
-//             std::begin(perception_camera_parameters_msg.right_intrinsics));
-//   std::copy(
-//       std::begin(
-//           cameraParametersPacket.cameraParameters[stereo_cameras_direction_]
-//               .rotationLeftInRight),
-//       std::end(
-//           cameraParametersPacket.cameraParameters[stereo_cameras_direction_]
-//               .rotationLeftInRight),
-//       std::begin(perception_camera_parameters_msg.rotation_left_in_right));
-//   std::copy(
-//       std::begin(
-//           cameraParametersPacket.cameraParameters[stereo_cameras_direction_]
-//               .translationLeftInRight),
-//       std::end(
-//           cameraParametersPacket.cameraParameters[stereo_cameras_direction_]
-//               .translationLeftInRight),
-//       std::begin(perception_camera_parameters_msg.translation_left_in_right));
+  RCLCPP_INFO(get_logger(), "FlyToWaylineMode: %s", flyToWaylineMode);
+  RCLCPP_INFO(get_logger(), "FinishAction: %s", finishAction);
+  RCLCPP_INFO(get_logger(), "ExitOnRCLost: %s", exitOnRCLost);
+  RCLCPP_INFO(get_logger(), "ExecuteRCLostAction: %s", executeRCLostAction);
+  RCLCPP_INFO(get_logger(), "TakeOffSecurityHeight: %d", takeOffSecurityHeight);
+  RCLCPP_INFO(get_logger(), "GlobalTransitionalSpeed: %d",
+              globalTransitionalSpeed);
+}
 
-//   perception_camera_parameters_pub_->publish(perception_camera_parameters_msg);
-// }
+T_DjiReturnCode
+WaypointV2Module::waypoint_v2_event_callback(
+    T_DjiWaypointV2MissionEventPush eventData)
+
+{
+  if (eventData.event == 0x01)
+  {
+    RCLCPP_INFO(get_logger(), "[%s]: Mission interrupted reason is 0x%x",
+                s_waypoint_v2_event_str[c_waypoint_v2_get_mission_event_index(
+                                            eventData.event)]
+                    .eventStr,
+                eventData.data.interruptReason);
+  }
+  else if (eventData.event == 0x02)
+  {
+    RCLCPP_INFO(get_logger(), "[%s]: Mission recover reason is 0x%x",
+                s_waypoint_v2_event_str[c_waypoint_v2_get_mission_event_index(
+                                            eventData.event)]
+                    .eventStr,
+                eventData.data.recoverProcess);
+  }
+  else if (eventData.event == 0x03)
+  {
+    RCLCPP_INFO(get_logger(), "[%s]: Mission exit reason is 0x%x",
+                s_waypoint_v2_event_str[c_waypoint_v2_get_mission_event_index(
+                                            eventData.event)]
+                    .eventStr,
+                eventData.data.exitReason);
+  }
+  else if (eventData.event == 0x10)
+  {
+    RCLCPP_INFO(get_logger(), "[%s]: Current waypoint index is %d",
+                s_waypoint_v2_event_str[c_waypoint_v2_get_mission_event_index(
+                                            eventData.event)]
+                    .eventStr,
+                eventData.data.waypointIndex);
+  }
+  else if (eventData.event == 0x11)
+  {
+    RCLCPP_INFO(
+        get_logger(), "[%s]: Current mission execute times is %d",
+        s_waypoint_v2_event_str[c_waypoint_v2_get_mission_event_index(
+                                    eventData.event)]
+            .eventStr,
+        eventData.data.T_DjiWaypointV2MissionExecEvent.currentMissionExecTimes);
+  }
+  else if (eventData.event == 0x12)
+  {
+    RCLCPP_INFO(get_logger(), "[%s]: avoid obstacle state:%d",
+                s_waypoint_v2_event_str[c_waypoint_v2_get_mission_event_index(
+                                            eventData.event)]
+                    .eventStr,
+                eventData.data.avoidState);
+  }
+  else if (eventData.event == 0x30)
+  {
+    RCLCPP_INFO(get_logger(),
+                "[%s]: action id:%d, pre actuator state:%d, current actuator "
+                "state:%d, result:0x%08llX",
+                s_waypoint_v2_event_str[c_waypoint_v2_get_mission_event_index(
+                                            eventData.event)]
+                    .eventStr,
+                eventData.data.T_DjiWaypointV2ActionExecEvent.actionId,
+                eventData.data.T_DjiWaypointV2ActionExecEvent.preActuatorState,
+                eventData.data.T_DjiWaypointV2ActionExecEvent.curActuatorState,
+                eventData.data.T_DjiWaypointV2ActionExecEvent.result);
+  }
+
+  return DJI_ERROR_SYSTEM_MODULE_CODE_SUCCESS;
+}
+
+uint8_t
+WaypointV2Module::waypoint_v2_get_mission_event_index(uint8_t eventID)
+{
+  uint8_t i;
+  for (i = 0;
+       i < sizeof(s_waypoint_v2_event_str) / sizeof(waypoint_v2_event_str); i++)
+  {
+    if (s_waypoint_v2_event_str[i].eventID == eventID)
+    {
+      return i;
+    }
+  }
+  return i;
+}
+
+T_DjiReturnCode
+WaypointV2Module::waypoint_v2_state_callback(
+    T_DjiWaypointV2MissionStatePush stateData)
+{
+  static uint32_t curMs = 0;
+  static uint32_t preMs = 0;
+  rclcpp::Time curTime = this->get_clock()->now();
+  curMs = curTime.seconds() * 1000;
+  // &curMs = this->get_clock()->now();
+  if (curMs - preMs >= 1000)
+  {
+    preMs = curMs;
+    RCLCPP_INFO(get_logger(),
+                "[Waypoint Index:%d]: State: %s, velocity:%.2f m/s",
+                stateData.curWaypointIndex,
+                s_waypoint_v2_state_str[waypoint_v2_get_mission_state_index(
+                                         stateData.state)]
+                    .stateStr,
+                (dji_f32_t)stateData.velocity / 100);
+  }
+
+  return DJI_ERROR_SYSTEM_MODULE_CODE_SUCCESS;
+}
+
+uint8_t
+WaypointV2Module::waypoint_v2_get_mission_state_index(uint8_t state)
+{
+  uint8_t i;
+  for (i = 0;
+       i < sizeof(s_waypoint_v2_state_str) / sizeof(waypoint_v2_state_str);
+       i++)
+  {
+    if (s_waypoint_v2_state_str[i].missionState == state)
+    {
+      return i;
+    }
+  }
+  return i;
+}
 
 }  // namespace psdk_ros2

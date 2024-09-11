@@ -18,12 +18,12 @@
 #ifndef PSDK_WRAPPER_INCLUDE_PSDK_WRAPPER_MODULES_WAYPOINT_V2_HPP_
 #define PSDK_WRAPPER_INCLUDE_PSDK_WRAPPER_MODULES_WAYPOINT_V2_HPP_
 
-#include <dji_perception.h>
 
 #include "dji_waypoint_v2.h"
 #include "dji_fc_subscription.h"
 #include "dji_logger.h"
 #include "dji_platform.h"
+// #include "dji_waypoint_v2_type.h"
 #include "math.h"
 #include <algorithm>
 #include <map>
@@ -35,6 +35,24 @@
 #include <string>
 #include <unordered_map>
 #include <vector>
+#include <iostream>
+#include <fstream>
+#include <sstream>
+#include <cstdlib>
+#include <cstdio>
+#include <pugixml.hpp>
+
+#include <std_srvs/srv/trigger.hpp>
+
+typedef struct {
+    uint8_t eventID;
+    char *eventStr;
+} waypoint_v2_event_str;
+
+typedef struct {
+    uint8_t missionState;
+    char *stateStr;
+} waypoint_v2_state_str;
 
 namespace psdk_ros2
 {
@@ -100,16 +118,38 @@ class WaypointV2Module : public rclcpp_lifecycle::LifecycleNode
    */
   bool deinit();
 
+  // static const waypoint_v2_event_str s_waypoint_v2_event_str[];
+
+  // static const waypoint_v2_state_str s_waypoint_v2_state_str[];
+  
 //   struct PerceptionParams
 //   {
 //     std::string perception_camera_frame;
 //   };
 //   PerceptionParams params_;
 
-//  private:
-//   friend void c_perception_image_callback(T_DjiPerceptionImageInfo imageInfo,
-//                                         uint8_t* imageRawBuffer,
-//                                         uint32_t bufferLen);
+ private:
+  void start_v2_waypoint_mission(
+    const std::shared_ptr<std_srvs::srv::Trigger::Request> request,
+    const std::shared_ptr<std_srvs::srv::Trigger::Response> response
+  );
+  friend T_DjiReturnCode c_waypoint_v2_event_callback(T_DjiWaypointV2MissionEventPush eventData);
+  friend uint8_t c_waypoint_v2_get_mission_event_index(uint8_t eventID);
+  friend T_DjiReturnCode c_waypoint_v2_state_callback(T_DjiWaypointV2MissionStatePush stateData);
+
+  void extract_kmz(const std::string &kmz_file, const std::string &output_dir);
+
+  void parse_kmz(const std::string &output_dir);
+  
+  T_DjiReturnCode waypoint_v2_event_callback(T_DjiWaypointV2MissionEventPush eventData);
+
+  uint8_t waypoint_v2_get_mission_event_index(uint8_t eventID);
+
+  T_DjiReturnCode waypoint_v2_state_callback(T_DjiWaypointV2MissionStatePush stateData);
+
+  uint8_t waypoint_v2_get_mission_state_index(uint8_t state);
+
+  rclcpp::Service<std_srvs::srv::Trigger>::SharedPtr start_v2_waypoint_mission_;
 
 //   /* Streaming callbacks */
 //   /**
@@ -184,7 +224,10 @@ class WaypointV2Module : public rclcpp_lifecycle::LifecycleNode
 //       DJI_PERCEPTION_RECTIFY_DOWN, DJI_PERCEPTION_RECTIFY_FRONT,
 //       DJI_PERCEPTION_RECTIFY_REAR, DJI_PERCEPTION_RECTIFY_UP,
 //       DJI_PERCEPTION_RECTIFY_LEFT, DJI_PERCEPTION_RECTIFY_RIGHT};
-//   mutable std::shared_mutex global_ptr_mutex_;
+static const waypoint_v2_event_str s_waypoint_v2_event_str[];
+
+static const waypoint_v2_state_str s_waypoint_v2_state_str[];
+mutable std::shared_mutex global_ptr_mutex_;
 };
 
 extern std::shared_ptr<WaypointV2Module> global_waypoint_v2_ptr_;

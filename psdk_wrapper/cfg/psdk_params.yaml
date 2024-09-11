@@ -33,7 +33,7 @@
         liveview: true
         hms: true
         perception: true
-        waypoint_v2: false
+        waypoint_v2: true
 
       data_frequency: # Options are: 1, 5, 10, 50, 100, 200, 400 Hz
         imu: 100
