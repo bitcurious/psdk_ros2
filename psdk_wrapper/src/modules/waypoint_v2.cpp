@@ -105,8 +105,8 @@ WaypointV2Module::on_shutdown(const rclcpp_lifecycle::State &state)
 {
   (void)state;
   RCLCPP_INFO(get_logger(), "Shutting down WaypointV2Module");
-    std::unique_lock<std::shared_mutex> lock(global_ptr_mutex_);
-    global_waypoint_v2_ptr_.reset();
+  std::unique_lock<std::shared_mutex> lock(global_ptr_mutex_);
+  global_waypoint_v2_ptr_.reset();
   return CallbackReturn::SUCCESS;
 }
 
@@ -184,7 +184,7 @@ WaypointV2Module::start_v2_waypoint_mission(
   std::string output_dir =
       "/home/ubuntu/psdk_ws/src/dji_rc_controller/waypoint_kmz";
   extract_kmz(kmz_file, output_dir);
-  parse_kmz(output_dir);
+  std::string parse_kmz_file = parse_kmz(output_dir);
   T_DjiReturnCode return_code;
   RCLCPP_INFO(get_logger(), "Register Mission event callback");
   return_code =
@@ -205,7 +205,8 @@ WaypointV2Module::start_v2_waypoint_mission(
                  "Register waypoint V2 state failed, error code: 0x%08X",
                  return_code);
   }
-  RCLCPP_INFO(get_logger(), "Done Register Mission state callback");
+  RCLCPP_INFO(get_logger(), "Uploding mission");
+  waypoint_v2_upload_mission(parse_kmz_file);
   // osalHandler->TaskSleepMs(timeOutMs);
 }
 
@@ -222,62 +223,16 @@ WaypointV2Module::extract_kmz(const std::string &kmz_file,
   }
 }
 
-void
+std::string
 WaypointV2Module::parse_kmz(const std::string &output_dir)
 {
-  std::string kml_file = output_dir + "/wpmz/template.kml";
+  std::string kml_file = output_dir + "/wpmz/waylines.wpml";
   std::ifstream file(kml_file);
   if (!file.is_open())
   {
     RCLCPP_ERROR(get_logger(), "Failed to open KML file: %s", kml_file.c_str());
-    return;
   }
-
-  std::stringstream buffer;
-  buffer << file.rdbuf();
-  std::string kml_content = buffer.str();
-
-  pugi::xml_document doc;
-  pugi::xml_parse_result result = doc.load_string(kml_content.c_str());
-  if (!result)
-  {
-    RCLCPP_ERROR(get_logger(), "Failed to parse KML file.");
-    return;
-  }
-
-  // Print the XML content for debugging
-  // RCLCPP_INFO(get_logger(), "KML File Content:\n%s", kml_content.c_str());
-
-  // Use the correct namespace
-  pugi::xml_node missionConfig =
-      doc.child("kml").child("Document").child("wpml:missionConfig");
-
-  if (!missionConfig)
-  {
-    RCLCPP_ERROR(get_logger(), "Missing missionConfig element in KML file.");
-    return;
-  }
-
-  auto flyToWaylineMode =
-      missionConfig.child("wpml:flyToWaylineMode").text().as_string();
-  auto finishAction =
-      missionConfig.child("wpml:finishAction").text().as_string();
-  auto exitOnRCLost =
-      missionConfig.child("wpml:exitOnRCLost").text().as_string();
-  auto executeRCLostAction =
-      missionConfig.child("wpml:executeRCLostAction").text().as_string();
-  int takeOffSecurityHeight =
-      missionConfig.child("wpml:takeOffSecurityHeight").text().as_int();
-  int globalTransitionalSpeed =
-      missionConfig.child("wpml:globalTransitionalSpeed").text().as_int();
-
-  RCLCPP_INFO(get_logger(), "FlyToWaylineMode: %s", flyToWaylineMode);
-  RCLCPP_INFO(get_logger(), "FinishAction: %s", finishAction);
-  RCLCPP_INFO(get_logger(), "ExitOnRCLost: %s", exitOnRCLost);
-  RCLCPP_INFO(get_logger(), "ExecuteRCLostAction: %s", executeRCLostAction);
-  RCLCPP_INFO(get_logger(), "TakeOffSecurityHeight: %d", takeOffSecurityHeight);
-  RCLCPP_INFO(get_logger(), "GlobalTransitionalSpeed: %d",
-              globalTransitionalSpeed);
+  return kml_file;
 }
 
 T_DjiReturnCode
@@ -382,7 +337,7 @@ WaypointV2Module::waypoint_v2_state_callback(
                 "[Waypoint Index:%d]: State: %s, velocity:%.2f m/s",
                 stateData.curWaypointIndex,
                 s_waypoint_v2_state_str[waypoint_v2_get_mission_state_index(
-                                         stateData.state)]
+                                            stateData.state)]
                     .stateStr,
                 (dji_f32_t)stateData.velocity / 100);
   }
@@ -395,8 +350,7 @@ WaypointV2Module::waypoint_v2_get_mission_state_index(uint8_t state)
 {
   uint8_t i;
   for (i = 0;
-       i < sizeof(s_waypoint_v2_state_str) / sizeof(waypoint_v2_state_str);
-       i++)
+       i < sizeof(s_waypoint_v2_state_str) / sizeof(waypoint_v2_state_str); i++)
   {
     if (s_waypoint_v2_state_str[i].missionState == state)
     {
@@ -404,6 +358,112 @@ WaypointV2Module::waypoint_v2_get_mission_state_index(uint8_t state)
     }
   }
   return i;
+}
+
+void
+WaypointV2Module::waypoint_v2_upload_mission(const std::string parse_kmz_file)
+{
+  std::ifstream file(parse_kmz_file);
+  RCLCPP_INFO(get_logger(), "Upload mission fn called");
+  std::stringstream buffer;
+  buffer << file.rdbuf();
+  std::string kml_content = buffer.str();
+
+  pugi::xml_document doc;
+  pugi::xml_parse_result result = doc.load_string(kml_content.c_str());
+  if (!result)
+  {
+    RCLCPP_ERROR(get_logger(), "Failed to parse KML file.");
+    return;
+  }
+  T_DjiReturnCode returnCode;
+  T_DjiWayPointV2MissionSettings missionInitSettings = {0};
+  T_DJIWaypointV2ActionList actionList = {NULL, 0};
+  missionInitSettings.repeatTimes = 1;
+  pugi::xml_node missionConfig =
+      doc.child("kml").child("Document").child("wpml:missionConfig");
+  if (!missionConfig)
+  {
+    RCLCPP_ERROR(get_logger(), "Missing missionConfig element in KML file.");
+    return;
+  }
+
+  auto flyToWaylineMode =
+      missionConfig.child("wpml:flyToWaylineMode").text().as_string();
+  if (std::string(flyToWaylineMode) == "safely")
+  {
+    missionInitSettings.gotoFirstWaypointMode =
+        DJI_WAYPOINT_V2_MISSION_GO_TO_FIRST_WAYPOINT_MODE_SAFELY;
+  }
+  else if (std::string(flyToWaylineMode) == "pointToPoint")
+  {
+    missionInitSettings.gotoFirstWaypointMode =
+        DJI_WAYPOINT_V2_MISSION_GO_TO_FIRST_WAYPOINT_MODE_POINT_TO_POINT;
+  }
+
+  auto finishAction =
+      missionConfig.child("wpml:finishAction").text().as_string();
+  if (std::string(finishAction) == "goHome")
+  {
+    missionInitSettings.finishedAction = DJI_WAYPOINT_V2_FINISHED_GO_HOME;
+  }
+  else if (std::string(finishAction) == "noAction")
+  {
+    missionInitSettings.finishedAction = DJI_WAYPOINT_V2_FINISHED_NO_ACTION;
+  }
+  else if (std::string(finishAction) == "autoLand")
+  {
+    missionInitSettings.finishedAction = DJI_WAYPOINT_V2_FINISHED_AUTO_LANDING;
+  }
+  else if (std::string(finishAction) == "gotoFirstWaypoint")
+  {
+    missionInitSettings.finishedAction =
+        DJI_WAYPOINT_V2_FINISHED_GO_TO_FIRST_WAYPOINT;
+  }
+
+  auto exitOnRCLost =
+      missionConfig.child("wpml:exitOnRCLost").text().as_string();
+  if (std::string(exitOnRCLost) == "goContinue")
+  {
+    missionInitSettings.actionWhenRcLost =
+        DJI_WAYPOINT_V2_MISSION_STOP_WAYPOINT_V2_AND_EXECUTE_RC_LOST_ACTION;
+  }
+  else if (std::string(exitOnRCLost) == "executeLostAction")
+  {
+    missionInitSettings.actionWhenRcLost =
+        DJI_WAYPOINT_V2_MISSION_KEEP_EXECUTE_WAYPOINT_V2;
+  }
+
+  auto executeRCLostAction =
+      missionConfig.child("wpml:executeRCLostAction").text().as_string();
+  int takeOffSecurityHeight =
+      missionConfig.child("wpml:takeOffSecurityHeight").text().as_int();
+
+  int globalTransitionalSpeed =
+      missionConfig.child("wpml:globalTransitionalSpeed").text().as_int();
+  if (globalTransitionalSpeed)
+  {
+    missionInitSettings.maxFlightSpeed = globalTransitionalSpeed;
+  }
+  else
+  {
+    missionInitSettings.maxFlightSpeed = 10;
+  }
+
+  missionInitSettings.autoFlightSpeed = 2;
+
+  // Extract all <wpml:index> values
+  std::vector<int> indexValues;
+  for (pugi::xml_node placemark :
+       doc.child("kml").child("Document").child("Folder").children("Placemark"))
+  {
+    int index = placemark.child("wpml:index").text().as_int();
+    indexValues.push_back(index);
+  }
+  int missionNum = *std::max_element(indexValues.begin(), indexValues.end());
+
+  RCLCPP_INFO(get_logger(), "Maximum index value: %d ", missionNum);
+  missionInitSettings.missTotalLen = missionNum + 2;
 }
 
 }  // namespace psdk_ros2
