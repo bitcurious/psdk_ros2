@@ -1030,6 +1030,9 @@ TelemetryModule::gps_fused_callback(const uint8_t *data, uint16_t data_size,
   std::unique_ptr<T_DjiFcSubscriptionPositionFused> gps_fused =
       std::make_unique<T_DjiFcSubscriptionPositionFused>(
           *reinterpret_cast<const T_DjiFcSubscriptionPositionFused *>(data));
+  latitude_ = psdk_utils::rad_to_deg(gps_fused->latitude);
+  longitude_ = psdk_utils::rad_to_deg(gps_fused->longitude);
+  altitude_ = gps_fused->altitude;
   sensor_msgs::msg::NavSatFix gps_position_fused_msg;
   gps_position_fused_msg.header.stamp = this->get_clock()->now();
   // DJI unit is rad. Transform it to deg

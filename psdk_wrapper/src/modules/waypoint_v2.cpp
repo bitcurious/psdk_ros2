@@ -18,6 +18,8 @@
 
 #include "psdk_wrapper/modules/waypoint_v2.hpp"
 
+#include "psdk_wrapper/modules/telemetry.hpp"
+
 namespace psdk_ros2
 {
 const waypoint_v2_event_str WaypointV2Module::s_waypoint_v2_event_str[] = {
@@ -207,7 +209,36 @@ WaypointV2Module::start_v2_waypoint_mission(
   }
   RCLCPP_INFO(get_logger(), "Uploding mission");
   waypoint_v2_upload_mission(parse_kmz_file);
-  // osalHandler->TaskSleepMs(timeOutMs);
+  T_DjiWaypointV2GlobalCruiseSpeed setGlobalCruiseSpeed = 0;
+  T_DjiWaypointV2GlobalCruiseSpeed getGlobalCruiseSpeed = 0;
+  RCLCPP_INFO(get_logger(), "Step 5: Start waypoint V2 mission");
+  return_code = DjiWaypointV2_Start();
+  if (return_code != DJI_ERROR_SYSTEM_MODULE_CODE_SUCCESS)
+  {
+    RCLCPP_ERROR(get_logger(),
+                 "Start waypoint V2 mission failed, error code: 0x%08X",
+                 return_code);
+  }
+  RCLCPP_INFO(get_logger(), "Step 6: Set global cruise speed");
+  setGlobalCruiseSpeed = 1.5;
+  return_code = DjiWaypointV2_SetGlobalCruiseSpeed(setGlobalCruiseSpeed);
+  if (return_code != DJI_ERROR_SYSTEM_MODULE_CODE_SUCCESS)
+  {
+    RCLCPP_ERROR(get_logger(),
+                 "Set global cruise speed failed, error code: 0x%08X",
+                 return_code);
+  }
+
+  RCLCPP_INFO(get_logger(), " Step 7: Get global cruise speed");
+  return_code = DjiWaypointV2_GetGlobalCruiseSpeed(&getGlobalCruiseSpeed);
+  if (return_code != DJI_ERROR_SYSTEM_MODULE_CODE_SUCCESS)
+  {
+    RCLCPP_ERROR(get_logger(),
+                 "Get global cruise speed failed, error code: 0x%08X",
+                 return_code);
+  }
+  RCLCPP_INFO(get_logger(), "Current global cruise speed is %f m/s",
+              getGlobalCruiseSpeed);
 }
 
 void
@@ -376,9 +407,10 @@ WaypointV2Module::waypoint_v2_upload_mission(const std::string parse_kmz_file)
     RCLCPP_ERROR(get_logger(), "Failed to parse KML file.");
     return;
   }
-  T_DjiReturnCode returnCode;
+  T_DjiReturnCode return_code;
   T_DjiWayPointV2MissionSettings missionInitSettings = {0};
   T_DJIWaypointV2ActionList actionList = {NULL, 0};
+  missionInitSettings.missionID = 12347;
   missionInitSettings.repeatTimes = 1;
   pugi::xml_node missionConfig =
       doc.child("kml").child("Document").child("wpml:missionConfig");
@@ -450,7 +482,20 @@ WaypointV2Module::waypoint_v2_upload_mission(const std::string parse_kmz_file)
     missionInitSettings.maxFlightSpeed = 10;
   }
 
-  missionInitSettings.autoFlightSpeed = 2;
+  int auto_flight_speed = doc.child("kml")
+                              .child("Document")
+                              .child("Folder")
+                              .child("wpml:autoFlightSpeed")
+                              .text()
+                              .as_int();
+  if (auto_flight_speed)
+  {
+    missionInitSettings.autoFlightSpeed = auto_flight_speed;
+  }
+  else
+  {
+    missionInitSettings.autoFlightSpeed = 2;
+  }
 
   // Extract all <wpml:index> values
   std::vector<int> indexValues;
@@ -463,7 +508,132 @@ WaypointV2Module::waypoint_v2_upload_mission(const std::string parse_kmz_file)
   int missionNum = *std::max_element(indexValues.begin(), indexValues.end());
 
   RCLCPP_INFO(get_logger(), "Maximum index value: %d ", missionNum);
-  missionInitSettings.missTotalLen = missionNum + 2;
+  // missionInitSettings.missTotalLen = missionNum + 2;
+  // static T_DjiOsalHandler *osalHandler = NULL;
+  T_DjiWaypointV2 *waypointV2List =
+      (T_DjiWaypointV2 *)malloc((missionNum + 2) * sizeof(T_DjiWaypointV2));
+  T_DjiWaypointV2 startPoint;
+  T_DjiWaypointV2 waypointV2;
+  if (global_telemetry_ptr_)
+  {
+    startPoint.latitude = global_telemetry_ptr_->latitude_;
+    startPoint.longitude = global_telemetry_ptr_->longitude_;
+    RCLCPP_INFO(get_logger(), "Start lat: %f, long: %f", startPoint.latitude, startPoint.longitude);
+    startPoint.relativeHeight = 15;
+    waypoint_v2_set_default_setting(&startPoint);
+    waypointV2List[0] = startPoint;
+    waypointV2.longitude = 0.002;
+    waypointV2.latitude = 0.004;
+    waypointV2.relativeHeight = startPoint.relativeHeight;
+    waypoint_v2_set_default_setting(&waypointV2);
+    waypointV2List[1] = waypointV2;
+    waypointV2.longitude = 0.007;
+    waypointV2.latitude = 0.007;
+    waypointV2.relativeHeight = startPoint.relativeHeight;
+    waypoint_v2_set_default_setting(&waypointV2);
+    waypointV2List[2] = waypointV2;
+
+    waypointV2.longitude = 0.006;
+    waypointV2.latitude = 0.004;
+    waypointV2.relativeHeight = startPoint.relativeHeight;
+    waypoint_v2_set_default_setting(&waypointV2);
+    waypointV2List[3] = waypointV2;
+
+    waypointV2.longitude = 0.005;
+    waypointV2.latitude = 0.006;
+    waypointV2.relativeHeight = startPoint.relativeHeight;
+    waypoint_v2_set_default_setting(&waypointV2);
+    waypointV2List[4] = waypointV2;
+
+    missionInitSettings.mission = waypointV2List;
+    missionInitSettings.missTotalLen = 5;
+    uint16_t actionNum = 3;
+    T_DJIWaypointV2ActionList actionList = {NULL, 0};
+    actionList.actions = waypoint_v2_generate_waypoint_v2_actions(actionNum);
+    actionList.actionNum = actionNum;
+    missionInitSettings.actionList = actionList;
+
+    RCLCPP_INFO(get_logger(), "Uploading mission");
+    return_code = DjiWaypointV2_UploadMission(&missionInitSettings);
+    if (return_code != DJI_ERROR_SYSTEM_MODULE_CODE_SUCCESS)
+    {
+      RCLCPP_ERROR(get_logger(),
+                   "Init waypoint V2 mission setting failed, ErrorCode:0x%lX",
+                   return_code);
+    }
+
+    RCLCPP_INFO(get_logger(), "mission uploaded successfully");
+  }
+}
+
+void
+WaypointV2Module::waypoint_v2_set_default_setting(T_DjiWaypointV2 *waypointV2)
+{
+  waypointV2->waypointType =
+      DJI_WAYPOINT_V2_FLIGHT_PATH_MODE_GO_TO_POINT_IN_STRAIGHT_AND_STOP;
+  waypointV2->headingMode = DJI_WAYPOINT_V2_HEADING_MODE_AUTO;
+  waypointV2->config.useLocalMaxVel = 0;
+  waypointV2->config.useLocalCruiseVel = 0;
+  waypointV2->dampingDistance = 40;
+  waypointV2->heading = 0;
+  waypointV2->turnMode = DJI_WAYPOINT_V2_TURN_MODE_CLOCK_WISE;
+
+  waypointV2->pointOfInterest.positionX = 0;
+  waypointV2->pointOfInterest.positionY = 0;
+  waypointV2->pointOfInterest.positionZ = 0;
+  waypointV2->maxFlightSpeed = 9;
+  waypointV2->autoFlightSpeed = 2;
+}
+
+// T_DJIWaypointV2Action
+// WaypointV2Module::waypoint_v2_generate_waypoint_v2_actions(uint16_t
+// actionNum)
+// {
+//   return T_DJIWaypointV2Action();
+// }
+
+T_DJIWaypointV2Action *
+WaypointV2Module::waypoint_v2_generate_waypoint_v2_actions(uint16_t actionNum)
+{
+  T_DJIWaypointV2Action *actions = NULL;
+  uint16_t i;
+  T_DJIWaypointV2Trigger trigger = {0};
+  T_DJIWaypointV2SampleReachPointTriggerParam sampleReachPointTriggerParam = {
+      0};
+  T_DJIWaypointV2Actuator actuator = {0};
+  T_DJIWaypointV2Action action = {0};
+
+  actions = (T_DJIWaypointV2Action *)malloc(actionNum *
+                                            sizeof(T_DJIWaypointV2Action));
+  if (actions == NULL)
+  {
+    return NULL;
+  }
+
+  for (i = 0; i < actionNum; i++)
+  {
+    sampleReachPointTriggerParam.waypointIndex = i;
+    sampleReachPointTriggerParam.terminateNum = 0;
+
+    trigger.actionTriggerType =
+        DJI_WAYPOINT_V2_ACTION_TRIGGER_TYPE_SAMPLE_REACH_POINT;
+    trigger.sampleReachPointTriggerParam.terminateNum =
+        sampleReachPointTriggerParam.terminateNum;
+    trigger.sampleReachPointTriggerParam.waypointIndex =
+        sampleReachPointTriggerParam.waypointIndex;
+
+    actuator.actuatorType = DJI_WAYPOINT_V2_ACTION_ACTUATOR_TYPE_CAMERA;
+    actuator.actuatorIndex = 0;
+    actuator.cameraActuatorParam.operationType =
+        DJI_WAYPOINT_V2_ACTION_ACTUATOR_CAMERA_OPERATION_TYPE_TAKE_PHOTO;
+
+    action.actionId = i;
+    memcpy(&action.actuator, &actuator, sizeof(actuator));
+    memcpy(&action.trigger, &trigger, sizeof(trigger));
+
+    actions[i] = action;
+  }
+  return actions;
 }
 
 }  // namespace psdk_ros2

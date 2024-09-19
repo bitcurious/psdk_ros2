@@ -153,6 +153,11 @@ class WaypointV2Module : public rclcpp_lifecycle::LifecycleNode
 
   void waypoint_v2_upload_mission(const std::string parse_kmz_file);
 
+  void waypoint_v2_set_default_setting(T_DjiWaypointV2* waypointV2);
+
+  T_DJIWaypointV2Action* waypoint_v2_generate_waypoint_v2_actions(
+      uint16_t actionNum);
+
   rclcpp::Service<std_srvs::srv::Trigger>::SharedPtr start_v2_waypoint_mission_;
 
   //   /* Streaming callbacks */

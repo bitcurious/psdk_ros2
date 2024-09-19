@@ -335,6 +335,9 @@ class TelemetryModule : public rclcpp_lifecycle::LifecycleNode
       gimbal_angles.vector.z = 0.0;
     }
   };
+  double latitude_;
+  double longitude_;
+  double altitude_;
 
   CopterState current_state_;
   TelemetryParams params_;
