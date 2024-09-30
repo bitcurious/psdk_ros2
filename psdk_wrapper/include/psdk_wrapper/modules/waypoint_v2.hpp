@@ -147,6 +147,9 @@ class WaypointV2Module : public rclcpp_lifecycle::LifecycleNode
   T_DJIWaypointV2Action* waypoint_v2_generate_waypoint_v2_actions(
       uint16_t actionNum);
 
+  void add_waypoint_data(T_DjiWaypointV2* waypointV2List[],
+                         pugi::xml_node folder);
+
   rclcpp::Service<std_srvs::srv::Trigger>::SharedPtr start_v2_waypoint_mission_;
 
   bool is_module_initialized_{false};

@@ -355,7 +355,8 @@ WaypointV2Module::waypoint_v2_state_callback(
   rclcpp::Duration elapsed = curTime - preTime;
 
   // Check if 1000 milliseconds (1 second) have passed
-  if (elapsed.seconds() >= 1.0) {
+  if (elapsed.seconds() >= 1.0)
+  {
     // Update previous time to current time
     preTime = curTime;
     RCLCPP_INFO(get_logger(),
@@ -512,30 +513,38 @@ WaypointV2Module::waypoint_v2_upload_mission(const std::string parse_kmz_file)
   {
     startPoint.latitude = global_telemetry_ptr_->latitude_;
     startPoint.longitude = global_telemetry_ptr_->longitude_;
-    RCLCPP_INFO(get_logger(), "Start lat: %f, long: %f", startPoint.latitude, startPoint.longitude);
+    RCLCPP_INFO(get_logger(), "Start lat: %f, long: %f", startPoint.latitude,
+                startPoint.longitude);
     startPoint.relativeHeight = 15;
     waypoint_v2_set_default_setting(&startPoint);
     waypointV2List[0] = startPoint;
+    /***
+     * adding function to assigne all coordinaties
+     *
+     */
+    pugi::xml_node folder = doc.child("kml").child("Document").child("Folder");
+    add_waypoint_data(&waypointV2List, folder);
+
     waypointV2.longitude = 0.00000779504;
     waypointV2.latitude = 0.00000398646;
-    waypointV2.relativeHeight = startPoint.relativeHeight+10;
+    waypointV2.relativeHeight = startPoint.relativeHeight + 10;
     waypoint_v2_set_default_setting(&waypointV2);
     waypointV2List[1] = waypointV2;
     waypointV2.longitude = 0.000006424418;
     waypointV2.latitude = 0.0000034580621;
-    waypointV2.relativeHeight = startPoint.relativeHeight+30;
+    waypointV2.relativeHeight = startPoint.relativeHeight + 30;
     waypoint_v2_set_default_setting(&waypointV2);
     waypointV2List[2] = waypointV2;
 
     waypointV2.longitude = 0.000006940875;
     waypointV2.latitude = 0.0000013610415;
-    waypointV2.relativeHeight = startPoint.relativeHeight+45;
+    waypointV2.relativeHeight = startPoint.relativeHeight + 45;
     waypoint_v2_set_default_setting(&waypointV2);
     waypointV2List[3] = waypointV2;
 
     waypointV2.longitude = 0.000002128827;
     waypointV2.latitude = 0.0000099329197;
-    waypointV2.relativeHeight = startPoint.relativeHeight+65;
+    waypointV2.relativeHeight = startPoint.relativeHeight + 65;
     waypoint_v2_set_default_setting(&waypointV2);
     waypointV2List[4] = waypointV2;
 
@@ -579,7 +588,6 @@ WaypointV2Module::waypoint_v2_set_default_setting(T_DjiWaypointV2 *waypointV2)
   waypointV2->autoFlightSpeed = 2;
 }
 
-
 T_DJIWaypointV2Action *
 WaypointV2Module::waypoint_v2_generate_waypoint_v2_actions(uint16_t actionNum)
 {
@@ -622,6 +630,117 @@ WaypointV2Module::waypoint_v2_generate_waypoint_v2_actions(uint16_t actionNum)
     actions[i] = action;
   }
   return actions;
+}
+
+void
+WaypointV2Module::add_waypoint_data(T_DjiWaypointV2 *waypointV2List[],
+                                    pugi::xml_node folder)
+{
+  RCLCPP_INFO(get_logger(), "Added waypoint function called successfully");
+  /***
+   * Mission data for each placemark
+   */
+
+  // .child("kml").child("Document").child("Folder");
+
+  if (!folder)
+  {
+    RCLCPP_ERROR(get_logger(), "Missing Folder element in KML file.");
+    return;
+  }
+
+  // Iterate over each Placemark
+  for (pugi::xml_node placemark = folder.child("Placemark"); placemark;
+       placemark = placemark.next_sibling("Placemark"))
+  {
+    // Extract data from each Placemark
+    std::string coordinates =
+        placemark.child("Point").child("coordinates").text().as_string();
+
+    int index = placemark.child("wpml:index").text().as_int();
+    // Split the coordinates (longitude, latitude, optional altitude)
+    std::stringstream ss(coordinates);
+    std::string item;
+    std::vector<std::string> tokens;
+
+    while (std::getline(ss, item, ','))
+    {
+      tokens.push_back(item);
+    }
+
+    // Assuming the coordinates are in the format: longitude,latitude[,altitude]
+    if (tokens.size() >= 2)
+    {
+      double longitude = std::stod(tokens[0]);  // First value is longitude
+      double latitude = std::stod(tokens[1]);   // Second value is latitude
+
+      RCLCPP_INFO(get_logger(), "Placemark - Longitude: %.6f, Latitude: %.6f",
+                  longitude, latitude);
+    }
+    else
+    {
+      RCLCPP_ERROR(get_logger(), "Invalid coordinates format.");
+    }
+    double height = placemark.child("wpml:height").text().as_double();
+    int useGlobalHeight =
+        placemark.child("wpml:useGlobalHeight").text().as_int();
+    int useGlobalSpeed = placemark.child("wpml:useGlobalSpeed").text().as_int();
+    int useGlobalHeadingParam =
+        placemark.child("wpml:useGlobalHeadingParam").text().as_int();
+    int useGlobalTurnParam =
+        placemark.child("wpml:useGlobalTurnParam").text().as_int();
+    int useStraightLine =
+        placemark.child("wpml:useStraightLine").text().as_int();
+    // Log the extracted information
+    RCLCPP_INFO(
+        get_logger(),
+        "Placemark %d - Coordinates: %s, Height: %.2f, UseGlobalHeight: %d, "
+        "UseGlobalSpeed: %d, UseGlobalHeadingParam: %d, useGlobalTurnParam: "
+        "%d, useStraightLine: %d",
+        index, coordinates.c_str(), height, useGlobalHeight, useGlobalSpeed,
+        useGlobalHeadingParam, useGlobalTurnParam, useStraightLine);
+
+    // If you need to handle actions, you can extract the actionGroup data
+    pugi::xml_node actionGroup = placemark.child("wpml:actionGroup");
+    if (actionGroup)
+    {
+      int actionGroupId =
+          actionGroup.child("wpml:actionGroupId").text().as_int();
+      int actionGroupStartIndex =
+          actionGroup.child("wpml:actionGroupStartIndex").text().as_int();
+      int actionGroupEndIndex =
+          actionGroup.child("wpml:actionGroupEndIndex").text().as_int();
+      int actionGroupMode =
+          actionGroup.child("wpml:actionGroupMode").text().as_int();
+      std::string actionTriggerType;
+      std::string actionActuatorFuncParam;
+      std::string actionActuatorFunc;
+      pugi::xml_node trigger_type = actionGroup.child("wpml:actionTriggerType");
+      if (trigger_type)
+      {
+        std::string actionTriggerType =
+            trigger_type.child("wpml:actionTriggerType").text().as_string();
+      }
+
+      pugi::xml_node action = actionGroup.child("wpml:action");
+      if (action)
+      {
+        std::string actionActuatorFunc =
+            action.child("wpml:actionActuatorFunc").text().as_string();
+        int actionId = action.child("wpml:actionId").text().as_int();
+        std::string actionActuatorFuncParam =
+            action.child("wpml:actionActuatorFuncParam").text().as_string();
+      }
+
+      RCLCPP_INFO(get_logger(),
+                  "ActionGroup: %d, actionGroupStartIndex: %d, "
+                  "actionGroupEndIndex: %d, actionGroupMode: %d, Trigger Type: "
+                  "%s, Actuator Function: %s, ActionParams are: %s",
+                  actionGroupId, actionGroupStartIndex, actionGroupEndIndex,
+                  actionGroupMode, actionTriggerType.c_str(),
+                  actionActuatorFunc.c_str(), actionActuatorFuncParam.c_str());
+    }
+  }
 }
 
 }  // namespace psdk_ros2
