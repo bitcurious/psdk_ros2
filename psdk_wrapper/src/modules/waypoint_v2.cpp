@@ -355,7 +355,8 @@ WaypointV2Module::waypoint_v2_state_callback(
   rclcpp::Duration elapsed = curTime - preTime;
 
   // Check if 1000 milliseconds (1 second) have passed
-  if (elapsed.seconds() >= 1.0) {
+  if (elapsed.seconds() >= 1.0)
+  {
     // Update previous time to current time
     preTime = curTime;
     RCLCPP_INFO(get_logger(),
@@ -512,30 +513,31 @@ WaypointV2Module::waypoint_v2_upload_mission(const std::string parse_kmz_file)
   {
     startPoint.latitude = global_telemetry_ptr_->latitude_;
     startPoint.longitude = global_telemetry_ptr_->longitude_;
-    RCLCPP_INFO(get_logger(), "Start lat: %f, long: %f", startPoint.latitude, startPoint.longitude);
+    RCLCPP_INFO(get_logger(), "Start lat: %f, long: %f", startPoint.latitude,
+                startPoint.longitude);
     startPoint.relativeHeight = 15;
     waypoint_v2_set_default_setting(&startPoint);
     waypointV2List[0] = startPoint;
     waypointV2.longitude = 0.00000779504;
     waypointV2.latitude = 0.00000398646;
-    waypointV2.relativeHeight = startPoint.relativeHeight+10;
+    waypointV2.relativeHeight = startPoint.relativeHeight + 10;
     waypoint_v2_set_default_setting(&waypointV2);
     waypointV2List[1] = waypointV2;
     waypointV2.longitude = 0.000006424418;
     waypointV2.latitude = 0.0000034580621;
-    waypointV2.relativeHeight = startPoint.relativeHeight+30;
+    waypointV2.relativeHeight = startPoint.relativeHeight + 30;
     waypoint_v2_set_default_setting(&waypointV2);
     waypointV2List[2] = waypointV2;
 
     waypointV2.longitude = 0.000006940875;
     waypointV2.latitude = 0.0000013610415;
-    waypointV2.relativeHeight = startPoint.relativeHeight+45;
+    waypointV2.relativeHeight = startPoint.relativeHeight + 45;
     waypoint_v2_set_default_setting(&waypointV2);
     waypointV2List[3] = waypointV2;
 
     waypointV2.longitude = 0.000002128827;
     waypointV2.latitude = 0.0000099329197;
-    waypointV2.relativeHeight = startPoint.relativeHeight+65;
+    waypointV2.relativeHeight = startPoint.relativeHeight + 65;
     waypoint_v2_set_default_setting(&waypointV2);
     waypointV2List[4] = waypointV2;
 
@@ -578,7 +580,6 @@ WaypointV2Module::waypoint_v2_set_default_setting(T_DjiWaypointV2 *waypointV2)
   waypointV2->maxFlightSpeed = 9;
   waypointV2->autoFlightSpeed = 2;
 }
-
 
 T_DJIWaypointV2Action *
 WaypointV2Module::waypoint_v2_generate_waypoint_v2_actions(uint16_t actionNum)
