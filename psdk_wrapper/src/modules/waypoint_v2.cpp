@@ -154,23 +154,15 @@ WaypointV2Module::deinit()
 T_DjiReturnCode
 c_waypoint_v2_event_callback(T_DjiWaypointV2MissionEventPush eventData)
 {
-  std::unique_lock<std::shared_mutex> lock(
+  std::shared_lock<std::shared_mutex> lock(
       global_waypoint_v2_ptr_->global_ptr_mutex_);
   return global_waypoint_v2_ptr_->waypoint_v2_event_callback(eventData);
-}
-
-uint8_t
-c_waypoint_v2_get_mission_event_index(uint8_t eventID)
-{
-  std::unique_lock<std::shared_mutex> lock(
-      global_waypoint_v2_ptr_->global_ptr_mutex_);
-  return global_waypoint_v2_ptr_->waypoint_v2_get_mission_event_index(eventID);
 }
 
 T_DjiReturnCode
 c_waypoint_v2_state_callback(T_DjiWaypointV2MissionStatePush stateData)
 {
-  std::unique_lock<std::shared_mutex> lock(
+  std::shared_lock<std::shared_mutex> lock(
       global_waypoint_v2_ptr_->global_ptr_mutex_);
   return global_waypoint_v2_ptr_->waypoint_v2_state_callback(stateData);
 }
@@ -218,6 +210,7 @@ WaypointV2Module::start_v2_waypoint_mission(
     RCLCPP_ERROR(get_logger(),
                  "Start waypoint V2 mission failed, error code: 0x%08X",
                  return_code);
+    response->success = false;
   }
   RCLCPP_INFO(get_logger(), "Step 6: Set global cruise speed");
   setGlobalCruiseSpeed = 1.5;
@@ -239,6 +232,7 @@ WaypointV2Module::start_v2_waypoint_mission(
   }
   RCLCPP_INFO(get_logger(), "Current global cruise speed is %f m/s",
               getGlobalCruiseSpeed);
+  response->success = true;
 }
 
 void
@@ -274,7 +268,7 @@ WaypointV2Module::waypoint_v2_event_callback(
   if (eventData.event == 0x01)
   {
     RCLCPP_INFO(get_logger(), "[%s]: Mission interrupted reason is 0x%x",
-                s_waypoint_v2_event_str[c_waypoint_v2_get_mission_event_index(
+                s_waypoint_v2_event_str[waypoint_v2_get_mission_event_index(
                                             eventData.event)]
                     .eventStr,
                 eventData.data.interruptReason);
@@ -282,7 +276,7 @@ WaypointV2Module::waypoint_v2_event_callback(
   else if (eventData.event == 0x02)
   {
     RCLCPP_INFO(get_logger(), "[%s]: Mission recover reason is 0x%x",
-                s_waypoint_v2_event_str[c_waypoint_v2_get_mission_event_index(
+                s_waypoint_v2_event_str[waypoint_v2_get_mission_event_index(
                                             eventData.event)]
                     .eventStr,
                 eventData.data.recoverProcess);
@@ -290,7 +284,7 @@ WaypointV2Module::waypoint_v2_event_callback(
   else if (eventData.event == 0x03)
   {
     RCLCPP_INFO(get_logger(), "[%s]: Mission exit reason is 0x%x",
-                s_waypoint_v2_event_str[c_waypoint_v2_get_mission_event_index(
+                s_waypoint_v2_event_str[waypoint_v2_get_mission_event_index(
                                             eventData.event)]
                     .eventStr,
                 eventData.data.exitReason);
@@ -298,7 +292,7 @@ WaypointV2Module::waypoint_v2_event_callback(
   else if (eventData.event == 0x10)
   {
     RCLCPP_INFO(get_logger(), "[%s]: Current waypoint index is %d",
-                s_waypoint_v2_event_str[c_waypoint_v2_get_mission_event_index(
+                s_waypoint_v2_event_str[waypoint_v2_get_mission_event_index(
                                             eventData.event)]
                     .eventStr,
                 eventData.data.waypointIndex);
@@ -307,7 +301,7 @@ WaypointV2Module::waypoint_v2_event_callback(
   {
     RCLCPP_INFO(
         get_logger(), "[%s]: Current mission execute times is %d",
-        s_waypoint_v2_event_str[c_waypoint_v2_get_mission_event_index(
+        s_waypoint_v2_event_str[waypoint_v2_get_mission_event_index(
                                     eventData.event)]
             .eventStr,
         eventData.data.T_DjiWaypointV2MissionExecEvent.currentMissionExecTimes);
@@ -315,7 +309,7 @@ WaypointV2Module::waypoint_v2_event_callback(
   else if (eventData.event == 0x12)
   {
     RCLCPP_INFO(get_logger(), "[%s]: avoid obstacle state:%d",
-                s_waypoint_v2_event_str[c_waypoint_v2_get_mission_event_index(
+                s_waypoint_v2_event_str[waypoint_v2_get_mission_event_index(
                                             eventData.event)]
                     .eventStr,
                 eventData.data.avoidState);
@@ -325,7 +319,7 @@ WaypointV2Module::waypoint_v2_event_callback(
     RCLCPP_INFO(get_logger(),
                 "[%s]: action id:%d, pre actuator state:%d, current actuator "
                 "state:%d, result:0x%08llX",
-                s_waypoint_v2_event_str[c_waypoint_v2_get_mission_event_index(
+                s_waypoint_v2_event_str[waypoint_v2_get_mission_event_index(
                                             eventData.event)]
                     .eventStr,
                 eventData.data.T_DjiWaypointV2ActionExecEvent.actionId,
@@ -356,14 +350,14 @@ T_DjiReturnCode
 WaypointV2Module::waypoint_v2_state_callback(
     T_DjiWaypointV2MissionStatePush stateData)
 {
-  static uint32_t curMs = 0;
-  static uint32_t preMs = 0;
+  static rclcpp::Time preTime = this->get_clock()->now();
   rclcpp::Time curTime = this->get_clock()->now();
-  curMs = curTime.seconds() * 1000;
-  // &curMs = this->get_clock()->now();
-  if (curMs - preMs >= 1000)
-  {
-    preMs = curMs;
+  rclcpp::Duration elapsed = curTime - preTime;
+
+  // Check if 1000 milliseconds (1 second) have passed
+  if (elapsed.seconds() >= 1.0) {
+    // Update previous time to current time
+    preTime = curTime;
     RCLCPP_INFO(get_logger(),
                 "[Waypoint Index:%d]: State: %s, velocity:%.2f m/s",
                 stateData.curWaypointIndex,
@@ -458,12 +452,12 @@ WaypointV2Module::waypoint_v2_upload_mission(const std::string parse_kmz_file)
   if (std::string(exitOnRCLost) == "goContinue")
   {
     missionInitSettings.actionWhenRcLost =
-        DJI_WAYPOINT_V2_MISSION_STOP_WAYPOINT_V2_AND_EXECUTE_RC_LOST_ACTION;
+        DJI_WAYPOINT_V2_MISSION_KEEP_EXECUTE_WAYPOINT_V2;
   }
   else if (std::string(exitOnRCLost) == "executeLostAction")
   {
     missionInitSettings.actionWhenRcLost =
-        DJI_WAYPOINT_V2_MISSION_KEEP_EXECUTE_WAYPOINT_V2;
+        DJI_WAYPOINT_V2_MISSION_STOP_WAYPOINT_V2_AND_EXECUTE_RC_LOST_ACTION;
   }
 
   auto executeRCLostAction =
@@ -522,26 +516,26 @@ WaypointV2Module::waypoint_v2_upload_mission(const std::string parse_kmz_file)
     startPoint.relativeHeight = 15;
     waypoint_v2_set_default_setting(&startPoint);
     waypointV2List[0] = startPoint;
-    waypointV2.longitude = 0.002;
-    waypointV2.latitude = 0.004;
-    waypointV2.relativeHeight = startPoint.relativeHeight;
+    waypointV2.longitude = 0.00000779504;
+    waypointV2.latitude = 0.00000398646;
+    waypointV2.relativeHeight = startPoint.relativeHeight+10;
     waypoint_v2_set_default_setting(&waypointV2);
     waypointV2List[1] = waypointV2;
-    waypointV2.longitude = 0.007;
-    waypointV2.latitude = 0.007;
-    waypointV2.relativeHeight = startPoint.relativeHeight;
+    waypointV2.longitude = 0.000006424418;
+    waypointV2.latitude = 0.0000034580621;
+    waypointV2.relativeHeight = startPoint.relativeHeight+30;
     waypoint_v2_set_default_setting(&waypointV2);
     waypointV2List[2] = waypointV2;
 
-    waypointV2.longitude = 0.006;
-    waypointV2.latitude = 0.004;
-    waypointV2.relativeHeight = startPoint.relativeHeight;
+    waypointV2.longitude = 0.000006940875;
+    waypointV2.latitude = 0.0000013610415;
+    waypointV2.relativeHeight = startPoint.relativeHeight+45;
     waypoint_v2_set_default_setting(&waypointV2);
     waypointV2List[3] = waypointV2;
 
-    waypointV2.longitude = 0.005;
-    waypointV2.latitude = 0.006;
-    waypointV2.relativeHeight = startPoint.relativeHeight;
+    waypointV2.longitude = 0.000002128827;
+    waypointV2.latitude = 0.0000099329197;
+    waypointV2.relativeHeight = startPoint.relativeHeight+65;
     waypoint_v2_set_default_setting(&waypointV2);
     waypointV2List[4] = waypointV2;
 
@@ -585,12 +579,6 @@ WaypointV2Module::waypoint_v2_set_default_setting(T_DjiWaypointV2 *waypointV2)
   waypointV2->autoFlightSpeed = 2;
 }
 
-// T_DJIWaypointV2Action
-// WaypointV2Module::waypoint_v2_generate_waypoint_v2_actions(uint16_t
-// actionNum)
-// {
-//   return T_DJIWaypointV2Action();
-// }
 
 T_DJIWaypointV2Action *
 WaypointV2Module::waypoint_v2_generate_waypoint_v2_actions(uint16_t actionNum)

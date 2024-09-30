@@ -117,23 +117,12 @@ class WaypointV2Module : public rclcpp_lifecycle::LifecycleNode
    */
   bool deinit();
 
-  // static const waypoint_v2_event_str s_waypoint_v2_event_str[];
-
-  // static const waypoint_v2_state_str s_waypoint_v2_state_str[];
-
-  //   struct PerceptionParams
-  //   {
-  //     std::string perception_camera_frame;
-  //   };
-  //   PerceptionParams params_;
-
  private:
   void start_v2_waypoint_mission(
       const std::shared_ptr<std_srvs::srv::Trigger::Request> request,
       const std::shared_ptr<std_srvs::srv::Trigger::Response> response);
   friend T_DjiReturnCode c_waypoint_v2_event_callback(
       T_DjiWaypointV2MissionEventPush eventData);
-  friend uint8_t c_waypoint_v2_get_mission_event_index(uint8_t eventID);
   friend T_DjiReturnCode c_waypoint_v2_state_callback(
       T_DjiWaypointV2MissionStatePush stateData);
 
@@ -160,83 +149,7 @@ class WaypointV2Module : public rclcpp_lifecycle::LifecycleNode
 
   rclcpp::Service<std_srvs::srv::Trigger>::SharedPtr start_v2_waypoint_mission_;
 
-  //   /* Streaming callbacks */
-  //   /**
-  //    * @brief Stereo camera stream of both left and right camera sensor
-  //    */
-  //   void perception_image_callback(T_DjiPerceptionImageInfo imageInfo,
-  //                                uint8_t* imageRawBuffer, uint32_t
-  //                                bufferLen);
-  //   /**
-  //    * @brief Stereo camera parameters publisher
-  //    * publish camera parametes of selected direction
-  //    * @return true/false True if pervious camera strem cleared successfully
-  //    * otherwise false
-  //    */
-  //   void perception_camera_parameters_publisher();
-  //   /**
-  //    * @brief Start Perception Streaming
-  //    * @param request Perception stereo camera stream Direction
-  //    * DOWN = 0, FRONT = 1, REAR = 2, UP = 3, LEFT = 4, RIGHT = 5
-  //    * @param response PerceptionStereoVisionSetup service response
-  //    */
-  //   void start_perception_cb(
-  //       const std::shared_ptr<PerceptionStereoVisionSetup::Request> request,
-  //       const std::shared_ptr<PerceptionStereoVisionSetup::Response>
-  //       response);
-
-  //   /**
-  //    * @brief Start the perception stereo camera stream
-  //    * @param stereo_cameras_direction select perception stereo cameras
-  //    direction
-  //    * @return true/false Returns true if the streaming has been started
-  //    * correctly and False otherwise.
-  //    */
-  //   bool start_perception_stereo_cameras_stream(
-  //       const uint stereo_cameras_direction);
-
-  //   /**
-  //    * @brief Stop the perception stereo camera stream
-  //    * @param stereo_cameras_direction select perception stereo cameras
-  //    direction
-  //    * @return true/false Returns true if the streaming has been stoped
-  //    * correctly and False otherwise.
-  //    */
-  //   bool stop_perception_stereo_cameras_stream(
-  //       const uint stereo_cameras_direction);
-
-  //   /**
-  //   @brief Clear the previous perception stereo camera stream
-  //   */
-  //   bool clear_perception_stereo_cameras_stream();
-
-  //   rclcpp::Service<PerceptionStereoVisionSetup>::SharedPtr
-  //       perception_stereo_vision_service_;
-  //   rclcpp_lifecycle::LifecyclePublisher<sensor_msgs::msg::Image>::SharedPtr
-  //       perception_stereo_vision_left_pub_;
-  //   rclcpp_lifecycle::LifecyclePublisher<sensor_msgs::msg::Image>::SharedPtr
-  //       perception_stereo_vision_right_pub_;
-  //   rclcpp_lifecycle::LifecyclePublisher<
-  //       psdk_interfaces::msg::PerceptionCameraParameters>::SharedPtr
-  //       perception_camera_parameters_pub_;
-
-  //   // Timer for publishing camera parameters at 20 hz
-  //   rclcpp::TimerBase::SharedPtr timer_;
-
   bool is_module_initialized_{false};
-  //   int stereo_cameras_direction_;
-  //   /**
-  //    * Populate the direction map for perception stereo camera direction.
-  //    * refer typedef enum E_DjiPerceptionDirection for more information.
-  //    */
-  //   std::unordered_map<std::string, uint8_t> direction_map_ = {
-  //       {"DOWN", 0}, {"FRONT", 1}, {"REAR", 2},
-  //       {"UP", 3},   {"LEFT", 4},  {"RIGHT", 5}};
-
-  //   std::vector<E_DjiPerceptionDirection> perception_image_direction = {
-  //       DJI_PERCEPTION_RECTIFY_DOWN, DJI_PERCEPTION_RECTIFY_FRONT,
-  //       DJI_PERCEPTION_RECTIFY_REAR, DJI_PERCEPTION_RECTIFY_UP,
-  //       DJI_PERCEPTION_RECTIFY_LEFT, DJI_PERCEPTION_RECTIFY_RIGHT};
   static const waypoint_v2_event_str s_waypoint_v2_event_str[];
 
   static const waypoint_v2_state_str s_waypoint_v2_state_str[];
