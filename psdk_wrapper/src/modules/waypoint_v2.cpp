@@ -715,23 +715,34 @@ WaypointV2Module::add_waypoint_data(T_DjiWaypointV2 *waypointV2List[],
       std::string actionTriggerType;
       std::string actionActuatorFuncParam;
       std::string actionActuatorFunc;
+      int actionId;
       pugi::xml_node trigger_type = actionGroup.child("wpml:actionTriggerType");
       if (trigger_type)
       {
         std::string actionTriggerType =
             trigger_type.child("wpml:actionTriggerType").text().as_string();
       }
-
-      pugi::xml_node action = actionGroup.child("wpml:action");
-      if (action)
+      
+      for (pugi::xml_node action = actionGroup.child("wpml:action"); action;
+       action = action.next_sibling("wpml:action"))
       {
-        std::string actionActuatorFunc =
-            action.child("wpml:actionActuatorFunc").text().as_string();
-        int actionId = action.child("wpml:actionId").text().as_int();
-        std::string actionActuatorFuncParam =
-            action.child("wpml:actionActuatorFuncParam").text().as_string();
+        RCLCPP_INFO(get_logger(),
+                  "Inside action for loop");
+        if (action)
+        {
+          RCLCPP_INFO(get_logger(),
+                  "Inside action IF statement");
+          actionActuatorFunc =
+              action.child("wpml:actionActuatorFunc").text().as_string();
+          actionId = action.child("wpml:actionId").text().as_int();
+          actionActuatorFuncParam =
+              action.child("wpml:actionActuatorFuncParam").text().as_string();
+          RCLCPP_INFO(get_logger(),
+                  "Actuator Function: %s, Action ID is %d, ActionParams are: %s",
+                  actionActuatorFunc.c_str(), actionId, actionActuatorFuncParam.c_str());
+        }
       }
-
+      
       RCLCPP_INFO(get_logger(),
                   "ActionGroup: %d, actionGroupStartIndex: %d, "
                   "actionGroupEndIndex: %d, actionGroupMode: %d, Trigger Type: "
